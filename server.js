@@ -21,10 +21,10 @@ if (!fs.existsSync("uploads")) {
 
 // Supported languages and their respective Docker images
 const LANGUAGE_CONFIG = {
-    python: { image: "python:3.9", ext: ".py", command: "python3 /app/code/{filename}" },
-    cpp: { image: "gcc:latest", ext: ".cpp", command: "g++ /app/code/{filename} -o /app/code/a.out && /app/code/a.out" },
-    java: { image: "openjdk:17", ext: ".java", command: "javac /app/code/{filename} && java -cp /app/code {classname}" },
-    javascript: { image: "node:22", ext: ".js", command: "node /app/code/{filename}" }
+    python: { image: "python:3.9", ext: ".py", command: "python3 /tmp/{filename}" },
+    cpp: { image: "gcc:latest", ext: ".cpp", command: "g++ /tmp/{filename} -o /tmp/a.out && chmod +x /tmp/a.out && /tmp/a.out" },
+    java: { image: "openjdk:17", ext: ".java", command: "javac /tmp/{filename} && java -cp /tmp {classname}" },
+    javascript: { image: "node:22", ext: ".js", command: "node /tmp/{filename}" }
 };
 
 app.post("/execute", upload.single("file"), async (req, res) => {
@@ -80,12 +80,13 @@ async function runInDocker(filePath, command, memory_limit, time_limit, image) {
     try {
         const container = await docker.createContainer({
             Image: image,
-            Cmd: ["sh", "-c", `timeout ${time_limit}s ${command}`],
+            Cmd: ["sh", "-c", `cp /app/code/${path.basename(filePath)} /tmp && cd /tmp && timeout ${time_limit}s ${command}`],
             HostConfig: {
-                Binds: [`${path.dirname(filePath)}:/app/code`],
+                Binds: [`${path.dirname(filePath)}:/app/code:ro`], // Make uploads read-only
+                Tmpfs: { "/tmp": "exec,rw" }, // Create a writable tmpfs inside Docker
                 Memory: memory_limit * 1024 * 1024,
                 PidsLimit: 50,
-                ReadonlyRootfs: true,
+                // ReadonlyRootfs: true,
             },
             NetworkDisabled: true,
             Tty: false,
