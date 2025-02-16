@@ -3,7 +3,6 @@ const multer = require("multer");
 const Docker = require("dockerode");
 const fs = require("fs");
 const path = require("path");
-const { execSync } = require("child_process");
 
 const app = express();
 const docker = new Docker();
@@ -22,15 +21,8 @@ if (!fs.existsSync("uploads")) {
 
 const LANGUAGE_IMAGES = {
     python: "python:3.9",
-    // node: "node:16",
-    // java: "openjdk:17",
-    // cpp: "gcc:latest",
-    // c: "gcc:latest",
-    // go: "golang:latest",
-    // ruby: "ruby:latest",
-    // rust: "rust:latest"
+    // Add other languages if needed
 };
-
 
 app.post("/execute", upload.single("file"), async (req, res) => {
     try {
@@ -49,11 +41,18 @@ app.post("/execute", upload.single("file"), async (req, res) => {
 
         const filePath = path.join(__dirname, file.path);
 
-        // Run the file inside a Docker container
-        const result = await runInDocker(filePath, command, memory_limit, time_limit, image);
+        const newFilePath = path.join(path.dirname(filePath), "script.py");
 
-        // Cleanup: Remove the uploaded file
-        fs.unlinkSync(filePath);
+        // Rename the uploaded file to script.py
+        fs.renameSync(filePath, newFilePath);
+
+        // Run the file inside a Docker container
+        const result = await runInDocker(newFilePath, command, memory_limit, time_limit, image);
+
+        // Only delete the file **after the execution completes**
+        if (fs.existsSync(filePath)) {
+            // fs.unlinkSync(filePath);
+        }
 
         res.json(result);
     } catch (error) {
@@ -62,11 +61,18 @@ app.post("/execute", upload.single("file"), async (req, res) => {
 });
 
 async function runInDocker(filePath, command, memory_limit, time_limit, image) {
+    console.log(`Executing: ${command}`);
+    console.log(`File Path: ${filePath}`);
+    console.log(`Memory Limit: ${memory_limit} MB, Time Limit: ${time_limit} sec`);
+    console.log(`Docker Image: ${image}`);
+
     try {
+        console.log(`Checking if file exists before execution: ${fs.existsSync(filePath)}`);
+
         const container = await docker.createContainer({
             Image: image, // Use the selected language's image
-            Cmd: ["sh", "-c", `timeout ${time_limit}s ${command}`],
-            Binds: [`${filePath}:/app/code:ro`], // Read-only bind
+            Cmd: ["sh", "-c", `ls -lah /app/code && cat /app/code/script.py && timeout ${time_limit}s ${command}`],
+            Binds: [`${path.dirname(filePath)}:/app/code`],
             NetworkDisabled: true, // No network access
             Memory: memory_limit * 1024 * 1024, // Convert MB to Bytes
             HostConfig: {
@@ -86,7 +92,11 @@ async function runInDocker(filePath, command, memory_limit, time_limit, image) {
         const logs = await container.logs({ stdout: true, stderr: true });
         const output = logs.toString();
 
-        await container.remove(); // Clean up container
+        console.log("Docker logs:", output);
+
+        // await container.remove(); // Clean up container
+        // Do NOT remove container immediately for debugging
+        console.log(`Created container ID: ${container.id}`);
 
         return {
             exit_code: result.StatusCode,
@@ -97,3 +107,7 @@ async function runInDocker(filePath, command, memory_limit, time_limit, image) {
     }
 }
 
+// **START THE SERVER**
+app.listen(PORT, () => {
+    console.log(`Server is running on http://localhost:${PORT}`);
+});
