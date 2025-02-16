@@ -22,6 +22,43 @@ if (!fs.existsSync(OUTPUT_DIR)) {
     fs.mkdirSync(OUTPUT_DIR, { recursive: true });
 }
 
+// DEBUG - Logging middleware to check if requests are received
+app.use((req, res, next) => {
+    console.log(`[${new Date().toISOString()}] Incoming request: ${req.method} ${req.url}`);
+    next();
+});
+
+// DEBUG - Basic POST Test Endpoint
+app.post("/test", (req, res) => {
+    console.log("Received /test request");
+    res.json({ message: "helloworld" });
+});
+
+// DEBUG - File Debugging Endpoint
+app.post("/log-file", upload.single("file"), (req, res) => {
+    if (!req.file) {
+        return res.status(400).json({ error: "No file uploaded" });
+    }
+    
+    const filePath = req.file.path;
+    console.log(`Received file: ${req.file.originalname}`);
+
+    // Read file contents
+    fs.readFile(filePath, "utf8", (err, data) => {
+        if (err) {
+            console.error("Error reading file:", err);
+            return res.status(500).json({ error: "Error reading file" });
+        }
+
+        console.log(`File content:\n${data}`);
+        res.json({ filename: req.file.originalname, content: data });
+
+        // Cleanup
+        fs.unlinkSync(filePath);
+    });
+});
+
+
 // Supported languages and their respective Docker images
 const LANGUAGE_CONFIG = {
     python: { 
