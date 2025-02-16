@@ -24,10 +24,26 @@ if (!fs.existsSync(OUTPUT_DIR)) {
 
 // Supported languages and their respective Docker images
 const LANGUAGE_CONFIG = {
-    python: { image: "python:3.9", ext: ".py", command: "python3 /tmp/{filename}" },
-    cpp: { image: "gcc:latest", ext: ".cpp", command: "g++ /tmp/{filename} -o /tmp/a.out && chmod +x /tmp/a.out && /tmp/a.out" },
-    java: { image: "openjdk:17", ext: ".java", command: "javac /tmp/{filename} && java -cp /tmp {classname}" },
-    javascript: { image: "node:22", ext: ".js", command: "node /tmp/{filename}" }
+    python: { 
+        image: "python:3.9", 
+        ext: ".py", 
+        command: "timeout {time_limit}s python3 /tmp/{filename}" 
+    },
+    cpp: { 
+        image: "gcc:latest", 
+        ext: ".cpp", 
+        command: "g++ /tmp/{filename} -o /tmp/a.out && chmod +x /tmp/a.out && timeout {time_limit}s /tmp/a.out" 
+    },
+    java: { 
+        image: "openjdk:17", 
+        ext: ".java", 
+        command: "javac /tmp/{filename} && timeout {time_limit}s java -cp /tmp {classname}" 
+    },
+    javascript: { 
+        image: "node:22", 
+        ext: ".js", 
+        command: "timeout {time_limit}s node /tmp/{filename}" 
+    }
 };
 
 app.post("/execute", upload.single("file"), async (req, res) => {
@@ -58,7 +74,9 @@ app.post("/execute", upload.single("file"), async (req, res) => {
         fs.renameSync(filePath, newFilePath); // Rename to original filename
 
         // Generate command dynamically
-        let command = config.command.replace("{filename}", file.originalname);
+        let command = config.command
+        .replace("{filename}", file.originalname)
+        .replace("{time_limit}", time_limit);
 
         // Handle Java class execution
         if (language === "java") {
@@ -83,7 +101,7 @@ async function runInDocker(filePath, command, memory_limit, time_limit, image) {
     try {
         const container = await docker.createContainer({
             Image: image,
-            Cmd: ["sh", "-c", `cp /app/code/${path.basename(filePath)} /tmp && cd /tmp && timeout ${time_limit}s ${command}`],
+            Cmd: ["sh", "-c", `cp /app/code/${path.basename(filePath)} /tmp && cd /tmp && ${command}`],
             HostConfig: {
                 Binds: [`${OUTPUT_DIR}:/app/code:ro`], // Make uploads read-only
                 Tmpfs: { "/tmp": "exec,rw" }, // Create a writable tmpfs inside Docker
