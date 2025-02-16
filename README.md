@@ -14,7 +14,7 @@ A **secure and isolated code execution API** that allows running **Python, C++, 
 
 ## 🎥 Demo GIF
 
-![Demo](media/sandboxed_executor_demo.gif)
+![Demo](media/sandboxed_executor_demo_trim.gif)
 
 ---
 
