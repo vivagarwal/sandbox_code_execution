@@ -3,20 +3,23 @@ const multer = require("multer");
 const Docker = require("dockerode");
 const fs = require("fs");
 const path = require("path");
+require("dotenv").config();
 
 const app = express();
 const docker = new Docker();
 const PORT = 3000;
+const TMP_DIR = process.env.TMP_DIR;
+const OUTPUT_DIR = `${TMP_DIR}/uploads`; // Configurable output dir
 
 // Set up file upload storage
-const upload = multer({ dest: "uploads/" });
+const upload = multer({ dest: OUTPUT_DIR });
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // Ensure upload directory exists
-if (!fs.existsSync("uploads")) {
-    fs.mkdirSync("uploads");
+if (!fs.existsSync(OUTPUT_DIR)) {
+    fs.mkdirSync(OUTPUT_DIR, { recursive: true });
 }
 
 // Supported languages and their respective Docker images
@@ -42,7 +45,7 @@ app.post("/execute", upload.single("file"), async (req, res) => {
             return res.status(400).json({ error: "Unsupported language" });
         }
 
-        const filePath = path.join(__dirname, file.path);
+        const filePath = path.join(OUTPUT_DIR, file.filename);
         const fileExt = path.extname(file.originalname);
         const fileNameWithoutExt = path.basename(file.originalname, fileExt);
 
@@ -51,7 +54,7 @@ app.post("/execute", upload.single("file"), async (req, res) => {
             return res.status(400).json({ error: `Invalid file extension for ${language}, expected ${config.ext}` });
         }
 
-        const newFilePath = path.join(path.dirname(filePath), file.originalname);
+        const newFilePath = path.join(OUTPUT_DIR, file.originalname);
         fs.renameSync(filePath, newFilePath); // Rename to original filename
 
         // Generate command dynamically
@@ -82,11 +85,10 @@ async function runInDocker(filePath, command, memory_limit, time_limit, image) {
             Image: image,
             Cmd: ["sh", "-c", `cp /app/code/${path.basename(filePath)} /tmp && cd /tmp && timeout ${time_limit}s ${command}`],
             HostConfig: {
-                Binds: [`${path.dirname(filePath)}:/app/code:ro`], // Make uploads read-only
+                Binds: [`${OUTPUT_DIR}:/app/code:ro`], // Make uploads read-only
                 Tmpfs: { "/tmp": "exec,rw" }, // Create a writable tmpfs inside Docker
                 Memory: memory_limit * 1024 * 1024,
                 PidsLimit: 50,
-                // ReadonlyRootfs: true,
             },
             NetworkDisabled: true,
             Tty: false,
