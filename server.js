@@ -67,7 +67,7 @@ app.post("/execute", upload.single("file"), async (req, res) => {
 
         // Cleanup uploaded file after execution
         if (fs.existsSync(newFilePath)) {
-            // fs.unlinkSync(newFilePath);
+            fs.unlinkSync(newFilePath);
         }
 
         res.json(result);
@@ -95,7 +95,7 @@ async function runInDocker(filePath, command, memory_limit, time_limit, image) {
         const result = await container.wait();
 
         const logs = await container.logs({ stdout: true, stderr: true });
-        const output = logs.toString();
+        const output = logs.toString().replace(/[\x00-\x1F\x7F-\x9F]/g, ""); 
 
         await container.remove(); // Cleanup container after execution
 
