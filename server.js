@@ -71,15 +71,14 @@ async function runInDocker(filePath, command, memory_limit, time_limit, image) {
 
         const container = await docker.createContainer({
             Image: image, // Use the selected language's image
-            Cmd: ["sh", "-c", `ls -lah /app/code && cat /app/code/script.py && timeout ${time_limit}s ${command}`],
-            Binds: [`${path.dirname(filePath)}:/app/code`],
-            NetworkDisabled: true, // No network access
-            Memory: memory_limit * 1024 * 1024, // Convert MB to Bytes
+            Cmd: ["sh", "-c", `ls -lah /app/code && cat /app/code/script.py && timeout ${time_limit}s ${command}`],            
             HostConfig: {
+                Binds: [`${path.dirname(filePath)}:/app/code`],
                 Memory: memory_limit * 1024 * 1024,
                 PidsLimit: 50, // Prevent fork bomb attacks
                 ReadonlyRootfs: true, // Make filesystem read-only
             },
+            NetworkDisabled: true, // No network access
             Tty: false,
         });
 
